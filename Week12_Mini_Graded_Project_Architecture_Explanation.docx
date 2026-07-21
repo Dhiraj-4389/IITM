@@ -1,0 +1,269 @@
+# Week 12 Mini Graded Project — Architecture Explanation
+
+## Project Title
+**E-Commerce Order, Refund & Exception Handling using Goal-Oriented Multi-Agent Workflow (CrewAI)**
+
+---
+
+## 1. Overview
+This project implements a **goal-oriented multi-agent workflow** for an e-commerce customer support scenario using **CrewAI**. The system is designed to handle customer requests related to delayed deliveries, damaged products, wrong items, return eligibility, refund requests, and policy exceptions.
+
+The workflow mirrors how a real support operation would process a case in stages. Instead of using a single general-purpose agent, the system uses **four specialized agents**, each responsible for a focused part of the problem. These agents collaborate through structured handoffs, where each downstream decision depends on upstream outputs.
+
+The project does **not** use Retrieval-Augmented Generation (RAG). Instead, it uses:
+- static business policy text,
+- mock order data,
+- predefined escalation rules,
+- hardcoded assumptions for policy enforcement.
+
+This satisfies the assignment requirement that knowledge sources may be simulated using static context rather than external retrieval.
+
+---
+
+## 2. Problem Statement
+E-commerce platforms receive large volumes of support queries every day. Common customer complaints include:
+- delayed delivery,
+- damaged products,
+- wrong items received,
+- requests for refunds,
+- return eligibility disputes,
+- exceptional cases that require manual approval.
+
+If these cases are handled manually, inconsistency may occur due to human workload, interpretation differences, or delays in decision-making. A structured multi-agent system can help by:
+- identifying the issue type,
+- applying business rules consistently,
+- recommending the proper resolution,
+- escalating risky or uncertain cases to human staff.
+
+---
+
+## 3. Objective
+The goal of this project is to build a **realistic multi-agent support workflow** that can:
+1. Identify customer order issues,
+2. Apply e-commerce return/refund policies,
+3. Recommend the best next action,
+4. Escalate exceptional or high-risk cases when necessary.
+
+---
+
+## 4. Agent Roles
+The system contains **four collaborating agents**.
+
+### Agent 1: Order Issue Identification Agent
+**Role:** Detect the type of customer problem and extract important facts.
+
+**Responsibilities:**
+- classify issue type (delay, damaged item, wrong item, refund request, return request, not received, unclear),
+- extract order-related facts,
+- identify customer intent,
+- estimate urgency,
+- detect whether important information is missing.
+
+**Output passed forward:**
+A structured issue summary used by later agents.
+
+---
+
+### Agent 2: Policy Interpretation Agent
+**Role:** Apply business rules to the identified issue.
+
+**Responsibilities:**
+- check if the case is eligible for refund or return,
+- interpret static e-commerce policy text,
+- determine allowed resolution types,
+- identify exceptions,
+- mark uncertainty if rules do not clearly apply.
+
+**Output passed forward:**
+A policy decision summary with eligibility and rule references.
+
+---
+
+### Agent 3: Resolution Recommendation Agent
+**Role:** Convert issue facts and policy outcomes into a practical response.
+
+**Responsibilities:**
+- recommend refund, replacement, wait, deny, or request more information,
+- generate customer-friendly wording,
+- determine operational next steps.
+
+**Output passed forward:**
+A clear recommended resolution and customer response draft.
+
+---
+
+### Agent 4: Escalation Agent
+**Role:** Decide whether human/manual review is required.
+
+**Responsibilities:**
+- escalate high-value cases,
+- escalate delivered-but-not-received cases,
+- escalate policy uncertainty,
+- escalate refund abuse risk,
+- escalate electronics refund exceptions,
+- finalize action ownership.
+
+**Output:**
+Final escalation decision and action owner.
+
+---
+
+## 5. Task Flow and Handoffs
+The workflow follows a **sequential collaboration model**.
+
+### Flow Sequence
+1. Customer query and order context are provided.
+2. The **Order Issue Identification Agent** extracts structured facts.
+3. The **Policy Interpretation Agent** applies business rules to those facts.
+4. The **Resolution Recommendation Agent** proposes an operational solution.
+5. The **Escalation Agent** decides whether manual review is required.
+
+This means agents do **not** work independently. Each agent depends on the outputs of previous agents, which satisfies the project requirement for agent collaboration and handoff dependency.
+
+---
+
+## 6. Escalation Logic
+Escalation is an explicit rule-driven step in the workflow.
+
+A case is escalated when one or more of the following conditions are true:
+- Order value is above **$500**,
+- Tracking says delivered but the customer claims they did not receive the item,
+- Policy interpretation is uncertain,
+- The customer has more than **2 refund requests in the last 30 days**,
+- The case involves an **opened electronics refund**, which may require manual approval,
+- There is missing critical information,
+- Facts appear conflicting or suspicious.
+
+### Why this matters
+This prevents risky approvals, reduces policy violations, and ensures sensitive cases are routed to human review.
+
+---
+
+## 7. Static Business Policy Used
+The notebook uses a static policy block instead of external retrieval.
+
+### Main policy rules
+- Standard return window: **7 days** from delivery
+- Damaged item: eligible for refund or replacement
+- Wrong item: eligible for refund or replacement
+- Delayed undelivered order by more than **5 days**: refund/cancellation possible
+- Non-returnable categories:
+  - grocery,
+  - personal care,
+  - custom-made products
+- Opened electronics:
+  - replacement allowed for damage/wrong item,
+  - refund may need manual approval
+- High-value orders over **$500** require review
+- Delivered but not received must be escalated
+- Repeat refund behavior may require review
+
+---
+
+## 8. Sample Input Cases
+Representative test inputs used in the notebook include:
+
+1. Delayed shipment, refund request
+2. Damaged blender, replacement request
+3. Wrong item delivered
+4. Return request outside policy window
+5. Personal-care product return
+6. Damaged high-value laptop
+7. Delivered but not received complaint
+8. Missing/unclear customer complaint
+
+These examples demonstrate both low-risk and edge-case behavior.
+
+---
+
+## 9. Expected Behavior by Scenario
+### Low-risk cases
+Examples:
+- delayed shipment beyond allowed threshold,
+- wrong item,
+- damaged low-value appliance.
+
+Expected behavior:
+- policy-based direct resolution,
+- no escalation in most cases.
+
+### High-risk or special cases
+Examples:
+- damaged laptop worth $1200,
+- delivered but missing phone,
+- ambiguous cases without sufficient information.
+
+Expected behavior:
+- conditional resolution,
+- escalation for human review.
+
+---
+
+## 10. Design Rationale
+This design was chosen because it reflects the architectural thinking of a real-world support workflow.
+
+### Key design strengths
+- **Specialized roles:** each agent has a narrow, focused responsibility.
+- **Clear handoffs:** structured outputs move from one stage to the next.
+- **Policy consistency:** fixed rules reduce arbitrary decision-making.
+- **Explicit escalation:** risky cases are deliberately identified.
+- **Easy extensibility:** more policies or fraud checks can be added later.
+
+The design avoids using a single “do everything” agent, which would reduce transparency and make reasoning harder to audit.
+
+---
+
+## 11. Architecture Diagram
+
+### Text Diagram
+```text
++---------------------------+
+| Customer Query + Order ID |
++-------------+-------------+
+              |
+              v
++-------------------------------+
+| Agent 1: Issue Identification |
+| - detect issue type           |
+| - extract facts               |
+| - identify intent             |
++-------------+-----------------+
+              |
+              v
++-------------------------------+
+| Agent 2: Policy Interpretation|
+| - apply policy rules          |
+| - check eligibility           |
+| - detect exceptions           |
++-------------+-----------------+
+              |
+              v
++-------------------------------+
+| Agent 3: Resolution           |
+| Recommendation                |
+| - propose refund/replacement  |
+| - generate next-step message  |
++-------------+-----------------+
+              |
+              v
++-------------------------------+
+| Agent 4: Escalation           |
+| - check risk/uncertainty      |
+| - route to manual review      |
+| - finalize action owner       |
++-------------+-----------------+
+              |
+              v
++-------------------------------+
+| Final Output                  |
+| - resolution                  |
+| - escalation status           |
++-------------------------------+
+```
+
+---
+
+## 12. Conclusion
+This project successfully demonstrates a **goal-oriented multi-agent system** for e-commerce order and refund handling. It uses 4 specialized agents, static policy reasoning, structured handoffs, and explicit escalation logic to solve realistic customer support problems.
+
+The workflow is practical, explainable, and aligned with the Week 12 grading criteria.
